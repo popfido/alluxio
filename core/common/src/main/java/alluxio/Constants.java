@@ -80,14 +80,6 @@ public final class Constants {
 
   public static final int MAX_PORT = 65535;
 
-  public static final int DEFAULT_MASTER_PORT = 19998;
-  public static final int DEFAULT_MASTER_WEB_PORT = DEFAULT_MASTER_PORT + 1;
-  public static final int DEFAULT_WORKER_PORT = 29998;
-  public static final int DEFAULT_WORKER_DATA_PORT = DEFAULT_WORKER_PORT + 1;
-  public static final int DEFAULT_WORKER_WEB_PORT = DEFAULT_WORKER_PORT + 2;
-
-  public static final int DEFAULT_HOST_RESOLUTION_TIMEOUT_MS = 5000;
-
   // Service versions should be incremented every time a backwards incompatible change occurs.
   public static final long BLOCK_MASTER_CLIENT_SERVICE_VERSION = 1;
   public static final long BLOCK_MASTER_WORKER_SERVICE_VERSION = 1;
@@ -96,7 +88,7 @@ public final class Constants {
   public static final long FILE_SYSTEM_MASTER_WORKER_SERVICE_VERSION = 1;
   public static final long FILE_SYSTEM_WORKER_CLIENT_SERVICE_VERSION = 1;
   public static final long LINEAGE_MASTER_CLIENT_SERVICE_VERSION = 1;
-  public static final long LINEAGE_MASTER_WORKER_SERVICE_VERSION = 1;
+  public static final long META_MASTER_CLIENT_SERVICE_VERSION = 1;
   public static final long KEY_VALUE_MASTER_CLIENT_SERVICE_VERSION = 1;
   public static final long KEY_VALUE_WORKER_SERVICE_VERSION = 1;
   public static final long UNKNOWN_SERVICE_VERSION = -1;
@@ -111,21 +103,16 @@ public final class Constants {
   public static final String FILE_SYSTEM_MASTER_CLIENT_SERVICE_NAME = "FileSystemMasterClient";
   public static final String FILE_SYSTEM_MASTER_WORKER_SERVICE_NAME = "FileSystemMasterWorker";
   public static final String LINEAGE_MASTER_CLIENT_SERVICE_NAME = "LineageMasterClient";
-  public static final String LINEAGE_MASTER_WORKER_SERVICE_NAME = "LineageMasterWorker";
+  public static final String META_MASTER_SERVICE_NAME = "MetaMaster";
   public static final String BLOCK_WORKER_CLIENT_SERVICE_NAME = "BlockWorkerClient";
   public static final String FILE_SYSTEM_WORKER_CLIENT_SERVICE_NAME = "FileSystemWorkerClient";
   public static final String KEY_VALUE_MASTER_CLIENT_SERVICE_NAME = "KeyValueMasterClient";
   public static final String KEY_VALUE_WORKER_CLIENT_SERVICE_NAME = "KeyValueWorkerClient";
 
-  public static final String REST_API_PREFIX = "/v1/api";
-
-  public static final String LOGGER_TYPE = PropertyKey.Name.LOGGER_TYPE;
+  public static final String REST_API_PREFIX = "/api/v1";
 
   public static final String MASTER_COLUMN_FILE_PREFIX = "COL_";
   public static final String FORMAT_FILE_PREFIX = "_format_";
-
-  public static final long CLIENT_METRICS_VERSION = 1L;
-  public static final int CLIENT_METRICS_SIZE = 13;
 
   public static final String SWIFT_AUTH_KEYSTONE = "keystone";
   public static final String SWIFT_AUTH_SWIFTAUTH = "swiftauth";
@@ -138,15 +125,19 @@ public final class Constants {
    */
   public static final int THRIFT_STOP_TIMEOUT_SECONDS = 60;
 
-  // ttl related
+  // Time-to-live
   public static final long NO_TTL = -1;
 
   // Security
-  // Security related constant value
   public static final int DEFAULT_FILE_SYSTEM_UMASK = 0022;
   public static final short DEFAULT_FILE_SYSTEM_MODE = (short) 0777;
   public static final short FILE_DIR_PERMISSION_DIFF = (short) 0111;
   public static final short INVALID_MODE = -1;
+
+  // Specific tier write
+  public static final int FIRST_TIER = 0;
+  public static final int SECOND_TIER = 1;
+  public static final int LAST_TIER = -1;
 
   private Constants() {} // prevent instantiation
 }

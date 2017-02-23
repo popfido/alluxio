@@ -24,9 +24,14 @@ import alluxio.client.file.options.CreateFileOptions;
 import alluxio.client.file.options.DeleteOptions;
 import alluxio.collections.Pair;
 import alluxio.exception.AlluxioException;
+import alluxio.master.block.BlockMaster;
+import alluxio.thrift.CommandType;
 import alluxio.util.CommonUtils;
+import alluxio.util.WaitForOptions;
 import alluxio.util.io.PathUtils;
 
+import com.google.common.base.Function;
+import com.google.common.base.Throwables;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -38,7 +43,8 @@ import java.util.Collections;
 import java.util.List;
 
 public class MasterFaultToleranceIntegrationTest {
-
+  // Fail if the cluster doesn't come up after this amount of time.
+  private static final int CLUSTER_WAIT_TIMEOUT_MS = 120 * Constants.SECOND_MS;
   private static final long WORKER_CAPACITY_BYTES = 10000;
   private static final int BLOCK_SIZE = 30;
   private static final int MASTERS = 5;
@@ -59,6 +65,7 @@ public class MasterFaultToleranceIntegrationTest {
     mMultiMasterLocalAlluxioCluster.initConfiguration();
     Configuration.set(PropertyKey.WORKER_MEMORY_SIZE, WORKER_CAPACITY_BYTES);
     Configuration.set(PropertyKey.USER_BLOCK_SIZE_BYTES_DEFAULT, BLOCK_SIZE);
+    Configuration.set(PropertyKey.MASTER_JOURNAL_TAILER_SHUTDOWN_QUIET_WAIT_TIME_MS, 100);
     mMultiMasterLocalAlluxioCluster.start();
     mFileSystem = mMultiMasterLocalAlluxioCluster.getClient();
   }
@@ -100,6 +107,29 @@ public class MasterFaultToleranceIntegrationTest {
     }
   }
 
+  /**
+   * Wait for a number of workers to register. This call will block until the block master
+   * detects the required number of workers or if the timeout is exceeded.
+   *
+   * @param store the block store object which references the correct block master
+   * @param numWorkers the number of workers to wait for
+   * @param timeoutMs the number of milliseconds to wait before timing out
+   */
+  private void waitForWorkerRegistration(final AlluxioBlockStore store, final int numWorkers,
+      int timeoutMs) {
+    CommonUtils.waitFor("Worker to register.", new Function<Void, Boolean>() {
+      @Override
+      public Boolean apply(Void aVoid) {
+        try {
+          return store.getWorkerInfoList().size() >= numWorkers;
+        } catch (Exception e) {
+          Throwables.propagate(e);
+        }
+        return false;
+      }
+    }, WaitForOptions.defaults().setTimeout(timeoutMs));
+  }
+
   @Test
   public void createFileFault() throws Exception {
     int clients = 10;
@@ -110,8 +140,8 @@ public class MasterFaultToleranceIntegrationTest {
     faultTestDataCheck(answer);
 
     for (int kills = 0; kills < MASTERS - 1; kills++) {
-      Assert.assertTrue(mMultiMasterLocalAlluxioCluster.killLeader());
-      CommonUtils.sleepMs(Constants.SECOND_MS * 2);
+      Assert.assertTrue(mMultiMasterLocalAlluxioCluster.stopLeader());
+      mMultiMasterLocalAlluxioCluster.waitForNewMaster(CLUSTER_WAIT_TIMEOUT_MS);
       faultTestDataCheck(answer);
       faultTestDataCreation(new AlluxioURI("/data_kills_" + kills), answer);
     }
@@ -122,8 +152,8 @@ public class MasterFaultToleranceIntegrationTest {
     // Kill leader -> create files -> kill leader -> delete files, repeat.
     List<Pair<Long, AlluxioURI>> answer = new ArrayList<>();
     for (int kills = 0; kills < MASTERS - 1; kills++) {
-      Assert.assertTrue(mMultiMasterLocalAlluxioCluster.killLeader());
-      CommonUtils.sleepMs(Constants.SECOND_MS * 2);
+      Assert.assertTrue(mMultiMasterLocalAlluxioCluster.stopLeader());
+      mMultiMasterLocalAlluxioCluster.waitForNewMaster(CLUSTER_WAIT_TIMEOUT_MS);
 
       if (kills % 2 != 0) {
         // Delete files.
@@ -182,7 +212,7 @@ public class MasterFaultToleranceIntegrationTest {
     faultTestDataCheck(answer);
 
     for (int kills = 0; kills < MASTERS - 1; kills++) {
-      Assert.assertTrue(mMultiMasterLocalAlluxioCluster.killStandby());
+      Assert.assertTrue(mMultiMasterLocalAlluxioCluster.stopStandby());
       CommonUtils.sleepMs(Constants.SECOND_MS * 2);
 
       // Leader should not change.
@@ -195,19 +225,84 @@ public class MasterFaultToleranceIntegrationTest {
 
   @Test
   public void workerReRegister() throws Exception {
-    AlluxioBlockStore store = new AlluxioBlockStore();
+    AlluxioBlockStore store = AlluxioBlockStore.create();
     Assert.assertEquals(WORKER_CAPACITY_BYTES, store.getCapacityBytes());
 
-    List<Pair<Long, AlluxioURI>> emptyAnswer = new ArrayList<>();
     for (int kills = 0; kills < MASTERS - 1; kills++) {
-      Assert.assertTrue(mMultiMasterLocalAlluxioCluster.killLeader());
-      CommonUtils.sleepMs(Constants.SECOND_MS * 2);
-
-      // TODO(cc) Why this test fail without this line? [ALLUXIO-970]
-      faultTestDataCheck(emptyAnswer);
-
+      Assert.assertTrue(mMultiMasterLocalAlluxioCluster.stopLeader());
+      mMultiMasterLocalAlluxioCluster.waitForNewMaster(CLUSTER_WAIT_TIMEOUT_MS);
+      waitForWorkerRegistration(store, 1, 5 * Constants.SECOND_MS);
       // If worker is successfully re-registered, the capacity bytes should not change.
       Assert.assertEquals(WORKER_CAPACITY_BYTES, store.getCapacityBytes());
     }
+  }
+
+  @Test
+  public void failoverWorkerRegister() throws Exception {
+    // Stop the default cluster.
+    after();
+
+    // Create a new cluster, with no workers initially
+    final MultiMasterLocalAlluxioCluster cluster = new MultiMasterLocalAlluxioCluster(2, 0);
+    cluster.initConfiguration();
+    cluster.start();
+    try {
+      // Get the first block master
+      BlockMaster blockMaster1 = cluster.getMaster().getInternalMaster().getBlockMaster();
+      // Register worker 1
+      long workerId1a =
+          blockMaster1.getWorkerId(new alluxio.wire.WorkerNetAddress().setHost("host1"));
+      blockMaster1.workerRegister(workerId1a, Collections.EMPTY_LIST, Collections.EMPTY_MAP,
+          Collections.EMPTY_MAP, Collections.EMPTY_MAP);
+
+      // Register worker 2
+      long workerId2a =
+          blockMaster1.getWorkerId(new alluxio.wire.WorkerNetAddress().setHost("host2"));
+      blockMaster1.workerRegister(workerId2a, Collections.EMPTY_LIST, Collections.EMPTY_MAP,
+          Collections.EMPTY_MAP, Collections.EMPTY_MAP);
+
+      Assert.assertEquals(2, blockMaster1.getWorkerCount());
+      // Worker heartbeats should return "Nothing"
+      Assert.assertEquals(CommandType.Nothing, blockMaster1
+          .workerHeartbeat(workerId1a, Collections.EMPTY_MAP, Collections.EMPTY_LIST,
+              Collections.EMPTY_MAP).getCommandType());
+      Assert.assertEquals(CommandType.Nothing, blockMaster1
+          .workerHeartbeat(workerId2a, Collections.EMPTY_MAP, Collections.EMPTY_LIST,
+              Collections.EMPTY_MAP).getCommandType());
+
+      Assert.assertTrue(cluster.stopLeader());
+      cluster.waitForNewMaster(CLUSTER_WAIT_TIMEOUT_MS);
+
+      // Get the new block master, after the failover
+      BlockMaster blockMaster2 = cluster.getMaster().getInternalMaster().getBlockMaster();
+
+      // Worker 2 tries to heartbeat (with original id), and should get "Register" in response.
+      Assert.assertEquals(CommandType.Register, blockMaster2
+          .workerHeartbeat(workerId2a, Collections.EMPTY_MAP, Collections.EMPTY_LIST,
+              Collections.EMPTY_MAP).getCommandType());
+
+      // Worker 2 re-registers (and gets a new worker id)
+      long workerId2b =
+          blockMaster2.getWorkerId(new alluxio.wire.WorkerNetAddress().setHost("host2"));
+      blockMaster2.workerRegister(workerId2b, Collections.EMPTY_LIST, Collections.EMPTY_MAP,
+          Collections.EMPTY_MAP, Collections.EMPTY_MAP);
+
+      // Worker 1 tries to heartbeat (with original id), and should get "Register" in response.
+      Assert.assertEquals(CommandType.Register, blockMaster2
+          .workerHeartbeat(workerId1a, Collections.EMPTY_MAP, Collections.EMPTY_LIST,
+              Collections.EMPTY_MAP).getCommandType());
+
+      // Worker 1 re-registers (and gets a new worker id)
+      long workerId1b =
+          blockMaster2.getWorkerId(new alluxio.wire.WorkerNetAddress().setHost("host1"));
+      blockMaster2.workerRegister(workerId1b, Collections.EMPTY_LIST, Collections.EMPTY_MAP,
+          Collections.EMPTY_MAP, Collections.EMPTY_MAP);
+
+    } finally {
+      cluster.stop();
+    }
+
+    // Start the default cluster.
+    before();
   }
 }

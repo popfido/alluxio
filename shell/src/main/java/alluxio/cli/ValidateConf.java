@@ -11,8 +11,7 @@
 
 package alluxio.cli;
 
-import alluxio.Constants;
-import alluxio.util.ConfigurationUtils;
+import alluxio.Configuration;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,10 +21,9 @@ import javax.annotation.concurrent.ThreadSafe;
 /**
  * Validate the Alluxio configuration.
  */
-// TODO(binfan): move property names from Constants to separate class and validate conf from there.
 @ThreadSafe
 public final class ValidateConf {
-  private static final Logger LOG = LoggerFactory.getLogger(Constants.LOGGER_TYPE);
+  private static final Logger LOG = LoggerFactory.getLogger(ValidateConf.class);
 
   /**
    * Console program that validates the configuration.
@@ -35,7 +33,7 @@ public final class ValidateConf {
   public static void main(String[] args) {
     int ret = 0;
     LOG.info("Validating configuration.");
-    if (ConfigurationUtils.validateConf()) {
+    if (Configuration.validate()) {
       LOG.info("All configuration entries are valid.");
     } else {
       LOG.info("Configuration has invalid entries.");

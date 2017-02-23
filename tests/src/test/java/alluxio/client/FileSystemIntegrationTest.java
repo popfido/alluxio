@@ -44,7 +44,7 @@ public final class FileSystemIntegrationTest {
   @Rule
   public LocalAlluxioClusterResource mLocalAlluxioClusterResource =
       new LocalAlluxioClusterResource.Builder()
-          .setProperty(PropertyKey.USER_FILE_BUFFER_BYTES, Integer.toString(USER_QUOTA_UNIT_BYTES))
+          .setProperty(PropertyKey.USER_FILE_BUFFER_BYTES, USER_QUOTA_UNIT_BYTES)
           .build();
   private FileSystem mFileSystem = null;
   private CreateFileOptions mWriteBoth;
@@ -187,7 +187,7 @@ public final class FileSystemIntegrationTest {
    * @param alternateUfsRoot the root of the alternate Ufs
    */
   private void destroyAlternateUfs(String alternateUfsRoot) throws Exception {
-    UnderFileSystemUtils.deleteDir(alternateUfsRoot);
+    UnderFileSystemUtils.deleteDirIfExists(alternateUfsRoot);
   }
 
   @Test

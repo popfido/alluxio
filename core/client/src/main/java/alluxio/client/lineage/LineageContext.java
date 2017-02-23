@@ -11,7 +11,10 @@
 
 package alluxio.client.lineage;
 
-import alluxio.client.ClientContext;
+import alluxio.util.network.NetworkAddressUtils;
+import alluxio.util.network.NetworkAddressUtils.ServiceType;
+
+import java.net.InetSocketAddress;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -51,13 +54,14 @@ public enum LineageContext {
   }
 
   /**
-   * Re-initializes the {@link LineageContext}. This method should only be used in
-   * {@link ClientContext}.
+   * Re-initializes the {@link LineageContext}.
    */
   public void reset() {
     if (mLineageMasterClientPool != null) {
       mLineageMasterClientPool.close();
     }
-    mLineageMasterClientPool = new LineageMasterClientPool(ClientContext.getMasterAddress());
+
+    InetSocketAddress masterAddress = NetworkAddressUtils.getConnectAddress(ServiceType.MASTER_RPC);
+    mLineageMasterClientPool = new LineageMasterClientPool(masterAddress);
   }
 }

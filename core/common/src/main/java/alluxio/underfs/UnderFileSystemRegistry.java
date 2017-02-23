@@ -11,8 +11,6 @@
 
 package alluxio.underfs;
 
-import alluxio.Constants;
-
 import com.google.common.base.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,9 +67,10 @@ import javax.annotation.concurrent.NotThreadSafe;
  */
 @NotThreadSafe
 public final class UnderFileSystemRegistry {
+  private static final Logger LOG = LoggerFactory.getLogger(UnderFileSystemRegistry.class);
 
   private static final List<UnderFileSystemFactory> FACTORIES = new CopyOnWriteArrayList<>();
-  private static final Logger LOG = LoggerFactory.getLogger(Constants.LOGGER_TYPE);
+
   private static boolean sInit = false;
 
   // prevent instantiation
@@ -114,6 +113,7 @@ public final class UnderFileSystemRegistry {
         return factory.create(path, ufsConf);
       } catch (Exception e) {
         errors.add(e);
+        LOG.warn("Failed to create ufs", e);
       }
     }
 
@@ -147,7 +147,8 @@ public final class UnderFileSystemRegistry {
       }
     }
 
-    LOG.warn("No Under File System Factory implementation supports the path {}", path);
+    LOG.warn("No Under File System Factory implementation supports the path {}. Please check if "
+        + "the under storage path is valid.", path);
     return null;
   }
 
@@ -199,7 +200,7 @@ public final class UnderFileSystemRegistry {
    * Factories are registered at the start of the factories list so they can override the existing
    * automatically discovered factories. Generally if you use the {@link ServiceLoader} mechanism
    * properly it should be unnecessary to call this, however since ServiceLoader discovery order
-   * may be susceptible to class loader behavioural differences there may be rare cases when you
+   * may be susceptible to class loader behavioral differences there may be rare cases when you
    * need to manually register the desired factory.
    * </p>
    *

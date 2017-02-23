@@ -11,9 +11,9 @@
 
 package alluxio.client.file;
 
-import alluxio.AbstractMasterClient;
 import alluxio.AlluxioURI;
-import alluxio.Constants;
+import alluxio.MasterClient;
+import alluxio.client.file.options.CheckConsistencyOptions;
 import alluxio.client.file.options.CompleteFileOptions;
 import alluxio.client.file.options.CreateDirectoryOptions;
 import alluxio.client.file.options.CreateFileOptions;
@@ -24,58 +24,59 @@ import alluxio.client.file.options.LoadMetadataOptions;
 import alluxio.client.file.options.MountOptions;
 import alluxio.client.file.options.SetAttributeOptions;
 import alluxio.exception.AlluxioException;
-import alluxio.thrift.AlluxioService;
-import alluxio.thrift.AlluxioTException;
-import alluxio.thrift.FileSystemMasterClientService;
-import alluxio.wire.ThriftUtils;
-
-import org.apache.thrift.TException;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.util.ArrayList;
 import java.util.List;
 
-import javax.annotation.concurrent.ThreadSafe;
+import javax.security.auth.Subject;
 
 /**
- * A wrapper for the thrift client to interact with the file system master, used by alluxio clients.
- *
- * Since thrift clients are not thread safe, this class is a wrapper to provide thread safety, and
- * to provide retries.
+ * A client to use for interacting with a file system master.
  */
-@ThreadSafe
-public final class FileSystemMasterClient extends AbstractMasterClient {
-  private FileSystemMasterClientService.Client mClient = null;
+public interface FileSystemMasterClient extends MasterClient {
 
   /**
-   * Creates a new file system master client.
-   *
-   * @param masterAddress the master address
+   * Factory for {@link FileSystemWorkerClient}.
    */
-  public FileSystemMasterClient(InetSocketAddress masterAddress) {
-    super(masterAddress);
+  class Factory {
+
+    private Factory() {} // prevent instantiation
+
+    /**
+     * Factory method for {@link FileSystemMasterClient}.
+     *
+     * @param masterAddress the master address
+     * @return a new {@link FileSystemMasterClient} instance
+     */
+    public static FileSystemMasterClient create(InetSocketAddress masterAddress) {
+      return create(null, masterAddress);
+    }
+
+    /**
+     * Factory method for {@link FileSystemMasterClient}.
+     *
+     * @param subject the parent subject
+     * @param masterAddress the master address
+     * @return a new {@link FileSystemMasterClient} instance
+     */
+    public static FileSystemMasterClient create(Subject subject, InetSocketAddress masterAddress) {
+      return RetryHandlingFileSystemMasterClient.create(subject, masterAddress);
+    }
   }
 
-  @Override
-  protected AlluxioService.Client getClient() {
-    return mClient;
-  }
-
-  @Override
-  protected String getServiceName() {
-    return Constants.FILE_SYSTEM_MASTER_CLIENT_SERVICE_NAME;
-  }
-
-  @Override
-  protected long getServiceVersion() {
-    return Constants.FILE_SYSTEM_MASTER_CLIENT_SERVICE_VERSION;
-  }
-
-  @Override
-  protected void afterConnect() throws IOException {
-    mClient = new FileSystemMasterClientService.Client(mProtocol);
-  }
+  /**
+   * Checks the consistency of Alluxio metadata against the under storage for all files and
+   * directories in a given subtree.
+   *
+   * @param path the root of the subtree to check
+   * @param options method options
+   * @return a list of inconsistent files and directories
+   * @throws AlluxioException if an Alluxio error occurs
+   * @throws IOException if an I/O error occurs
+   */
+  List<AlluxioURI> checkConsistency(AlluxioURI path, CheckConsistencyOptions options)
+      throws AlluxioException, IOException;
 
   /**
    * Creates a new directory.
@@ -85,16 +86,8 @@ public final class FileSystemMasterClient extends AbstractMasterClient {
    * @throws IOException if an I/O error occurs
    * @throws AlluxioException if an Alluxio error occurs
    */
-  public synchronized void createDirectory(final AlluxioURI path,
-      final CreateDirectoryOptions options) throws IOException, AlluxioException {
-    retryRPC(new RpcCallableThrowsAlluxioTException<Void>() {
-      @Override
-      public Void call() throws AlluxioTException, TException {
-        mClient.createDirectory(path.getPath(), options.toThrift());
-        return null;
-      }
-    });
-  }
+  void createDirectory(AlluxioURI path, CreateDirectoryOptions options)
+      throws IOException, AlluxioException;
 
   /**
    * Creates a new file.
@@ -104,16 +97,7 @@ public final class FileSystemMasterClient extends AbstractMasterClient {
    * @throws IOException if an I/O error occurs
    * @throws AlluxioException if an Alluxio error occurs
    */
-  public synchronized void createFile(final AlluxioURI path, final CreateFileOptions options)
-      throws IOException, AlluxioException {
-    retryRPC(new RpcCallableThrowsAlluxioTException<Void>() {
-      @Override
-      public Void call() throws AlluxioTException, TException {
-        mClient.createFile(path.getPath(), options.toThrift());
-        return null;
-      }
-    });
-  }
+  void createFile(AlluxioURI path, CreateFileOptions options) throws IOException, AlluxioException;
 
   /**
    * Marks a file as completed.
@@ -123,16 +107,8 @@ public final class FileSystemMasterClient extends AbstractMasterClient {
    * @throws IOException if an I/O error occurs
    * @throws AlluxioException if an Alluxio error occurs
    */
-  public synchronized void completeFile(final AlluxioURI path, final CompleteFileOptions options)
-      throws IOException, AlluxioException {
-    retryRPC(new RpcCallableThrowsAlluxioTException<Void>() {
-      @Override
-      public Void call() throws AlluxioTException, TException {
-        mClient.completeFile(path.getPath(), options.toThrift());
-        return null;
-      }
-    });
-  }
+  void completeFile(AlluxioURI path, CompleteFileOptions options)
+      throws IOException, AlluxioException;
 
   /**
    * Deletes a file or a directory.
@@ -142,16 +118,7 @@ public final class FileSystemMasterClient extends AbstractMasterClient {
    * @throws IOException if an I/O error occurs
    * @throws AlluxioException if an Alluxio error occurs
    */
-  public synchronized void delete(final AlluxioURI path, final DeleteOptions options)
-      throws IOException, AlluxioException {
-    retryRPC(new RpcCallableThrowsAlluxioTException<Void>() {
-      @Override
-      public Void call() throws AlluxioTException, TException {
-        mClient.remove(path.getPath(), options.isRecursive());
-        return null;
-      }
-    });
-  }
+  void delete(AlluxioURI path, DeleteOptions options) throws IOException, AlluxioException;
 
   /**
    * Frees a file.
@@ -161,16 +128,7 @@ public final class FileSystemMasterClient extends AbstractMasterClient {
    * @throws IOException if an I/O error occurs
    * @throws AlluxioException if an Alluxio error occurs
    */
-  public synchronized void free(final AlluxioURI path, final FreeOptions options)
-      throws IOException, AlluxioException {
-    retryRPC(new RpcCallableThrowsAlluxioTException<Void>() {
-      @Override
-      public Void call() throws AlluxioTException, TException {
-        mClient.free(path.getPath(), options.isRecursive());
-        return null;
-      }
-    });
-  }
+  void free(AlluxioURI path, FreeOptions options) throws IOException, AlluxioException;
 
   /**
    * @param path the file path
@@ -178,15 +136,7 @@ public final class FileSystemMasterClient extends AbstractMasterClient {
    * @throws IOException if an I/O error occurs
    * @throws AlluxioException if an Alluxio error occurs
    */
-  public synchronized URIStatus getStatus(final AlluxioURI path) throws IOException,
-      AlluxioException {
-    return retryRPC(new RpcCallableThrowsAlluxioTException<URIStatus>() {
-      @Override
-      public URIStatus call() throws AlluxioTException, TException {
-        return new URIStatus(ThriftUtils.fromThrift(mClient.getStatus(path.getPath())));
-      }
-    });
-  }
+  URIStatus getStatus(AlluxioURI path) throws IOException, AlluxioException;
 
   /**
    * @param path the file path
@@ -194,15 +144,7 @@ public final class FileSystemMasterClient extends AbstractMasterClient {
    * @throws IOException if an I/O error occurs
    * @throws AlluxioException if an Alluxio error occurs
    */
-  public synchronized long getNewBlockIdForFile(final AlluxioURI path)
-      throws IOException, AlluxioException {
-    return retryRPC(new RpcCallableThrowsAlluxioTException<Long>() {
-      @Override
-      public Long call() throws AlluxioTException, TException {
-        return mClient.getNewBlockIdForFile(path.getPath());
-      }
-    });
-  }
+  long getNewBlockIdForFile(AlluxioURI path) throws IOException, AlluxioException;
 
   /**
    * @param path the path to list
@@ -211,20 +153,8 @@ public final class FileSystemMasterClient extends AbstractMasterClient {
    * @throws IOException if an I/O error occurs
    * @throws AlluxioException if an Alluxio error occurs
    */
-  public synchronized List<URIStatus> listStatus(final AlluxioURI path,
-      final ListStatusOptions options) throws IOException, AlluxioException {
-    return retryRPC(new RpcCallableThrowsAlluxioTException<List<URIStatus>>() {
-      @Override
-      public List<URIStatus> call() throws AlluxioTException, TException {
-        List<URIStatus> result = new ArrayList<URIStatus>();
-        for (alluxio.thrift.FileInfo fileInfo : mClient
-            .listStatus(path.getPath(), options.toThrift())) {
-          result.add(new URIStatus(ThriftUtils.fromThrift(fileInfo)));
-        }
-        return result;
-      }
-    });
-  }
+  List<URIStatus> listStatus(AlluxioURI path, ListStatusOptions options)
+      throws IOException, AlluxioException;
 
   /**
    * Loads the metadata of a file from the under file system.
@@ -236,15 +166,8 @@ public final class FileSystemMasterClient extends AbstractMasterClient {
    * @deprecated since version 1.1 and will be removed in version 2.0
    */
   @Deprecated
-  public synchronized void loadMetadata(final AlluxioURI path,
-      final LoadMetadataOptions options) throws IOException, AlluxioException {
-    retryRPC(new RpcCallableThrowsAlluxioTException<Long>() {
-      @Override
-      public Long call() throws AlluxioTException, TException {
-        return mClient.loadMetadata(path.toString(), options.isRecursive());
-      }
-    });
-  }
+  void loadMetadata(AlluxioURI path, LoadMetadataOptions options)
+      throws IOException, AlluxioException;
 
   /**
    * Mounts the given UFS path under the given Alluxio path.
@@ -255,17 +178,8 @@ public final class FileSystemMasterClient extends AbstractMasterClient {
    * @throws AlluxioException if an Alluxio error occurs
    * @throws IOException an I/O error occurs
    */
-  public synchronized void mount(final AlluxioURI alluxioPath, final AlluxioURI ufsPath,
-      final MountOptions options)
-      throws AlluxioException, IOException {
-    retryRPC(new RpcCallableThrowsAlluxioTException<Void>() {
-      @Override
-      public Void call() throws AlluxioTException, TException {
-        mClient.mount(alluxioPath.toString(), ufsPath.toString(), options.toThrift());
-        return null;
-      }
-    });
-  }
+  void mount(AlluxioURI alluxioPath, AlluxioURI ufsPath, MountOptions options)
+      throws AlluxioException, IOException;
 
   /**
    * Renames a file or a directory.
@@ -275,16 +189,7 @@ public final class FileSystemMasterClient extends AbstractMasterClient {
    * @throws IOException if an I/O error occurs
    * @throws AlluxioException if an Alluxio error occurs
    */
-  public synchronized void rename(final AlluxioURI src, final AlluxioURI dst)
-      throws IOException, AlluxioException {
-    retryRPC(new RpcCallableThrowsAlluxioTException<Void>() {
-      @Override
-      public Void call() throws AlluxioTException, TException {
-        mClient.rename(src.getPath(), dst.getPath());
-        return null;
-      }
-    });
-  }
+  void rename(AlluxioURI src, AlluxioURI dst) throws IOException, AlluxioException;
 
   /**
    * Sets the file or directory attributes.
@@ -294,16 +199,8 @@ public final class FileSystemMasterClient extends AbstractMasterClient {
    * @throws IOException if an I/O error occurs
    * @throws AlluxioException if an Alluxio error occurs
    */
-  public synchronized void setAttribute(final AlluxioURI path, final SetAttributeOptions options)
-      throws IOException, AlluxioException {
-    retryRPC(new RpcCallableThrowsAlluxioTException<Void>() {
-      @Override
-      public Void call() throws AlluxioTException, TException {
-        mClient.setAttribute(path.getPath(), options.toThrift());
-        return null;
-      }
-    });
-  }
+  void setAttribute(AlluxioURI path, SetAttributeOptions options)
+      throws IOException, AlluxioException;
 
   /**
    * Schedules the async persistence of the given file.
@@ -312,16 +209,7 @@ public final class FileSystemMasterClient extends AbstractMasterClient {
    * @throws AlluxioException if an Alluxio error occurs
    * @throws IOException if an I/O error occurs
    */
-  public synchronized void scheduleAsyncPersist(final AlluxioURI path)
-      throws AlluxioException, IOException {
-    retryRPC(new RpcCallableThrowsAlluxioTException<Void>() {
-      @Override
-      public Void call() throws AlluxioTException, TException {
-        mClient.scheduleAsyncPersist(path.getPath());
-        return null;
-      }
-    });
-  }
+  void scheduleAsyncPersist(AlluxioURI path) throws AlluxioException, IOException;
 
   /**
    * Unmounts the given Alluxio path.
@@ -330,14 +218,5 @@ public final class FileSystemMasterClient extends AbstractMasterClient {
    * @throws AlluxioException if an Alluxio error occurs
    * @throws IOException an I/O error occurs
    */
-  public synchronized void unmount(final AlluxioURI alluxioPath)
-      throws AlluxioException, IOException {
-    retryRPC(new RpcCallableThrowsAlluxioTException<Void>() {
-      @Override
-      public Void call() throws AlluxioTException, TException {
-        mClient.unmount(alluxioPath.toString());
-        return null;
-      }
-    });
-  }
+  void unmount(AlluxioURI alluxioPath) throws AlluxioException, IOException;
 }

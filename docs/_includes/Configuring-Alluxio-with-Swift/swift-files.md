@@ -1,1 +1,3 @@
-    swift://<SWIFT CONTAINER>/alluxio/data/default_tests_files/BasicFile_STORE_SYNC_PERSIST
+```
+swift://<SWIFT CONTAINER>/alluxio/data/default_tests_files/Basic_CACHE_THROUGH
+```

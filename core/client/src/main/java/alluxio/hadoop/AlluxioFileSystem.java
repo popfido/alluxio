@@ -12,11 +12,10 @@
 package alluxio.hadoop;
 
 import alluxio.Constants;
+import alluxio.PropertyKey;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.DelegateToFileSystem;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URI;
@@ -37,8 +36,6 @@ import java.net.URISyntaxException;
  * {@link AbstractFileSystem} directly.
  */
 public class AlluxioFileSystem extends DelegateToFileSystem {
-  private static final Logger LOG = LoggerFactory.getLogger(Constants.LOGGER_TYPE);
-
   /**
    * This constructor has the signature needed by
    * {@link AbstractFileSystem#createFileSystem(URI, Configuration)}
@@ -56,6 +53,6 @@ public class AlluxioFileSystem extends DelegateToFileSystem {
 
   @Override
   public int getUriDefaultPort() {
-    return Constants.DEFAULT_MASTER_PORT;
+    return Integer.parseInt(PropertyKey.MASTER_RPC_PORT.getDefaultValue());
   }
 }

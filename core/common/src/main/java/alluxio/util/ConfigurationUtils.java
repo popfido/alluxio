@@ -12,7 +12,6 @@
 package alluxio.util;
 
 import alluxio.Configuration;
-import alluxio.Constants;
 import alluxio.PropertyKey;
 import alluxio.util.io.PathUtils;
 
@@ -23,14 +22,13 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Map;
 import java.util.Properties;
 
 /**
- * Utilities to create Alluxio configurations.
+ * Utilities for working with Alluxio configurations.
  */
 public final class ConfigurationUtils {
-  private static final Logger LOG = LoggerFactory.getLogger(Constants.LOGGER_TYPE);
+  private static final Logger LOG = LoggerFactory.getLogger(ConfigurationUtils.class);
 
   private ConfigurationUtils() {} // prevent instantiation
 
@@ -105,19 +103,12 @@ public final class ConfigurationUtils {
   }
 
   /**
-   * Validates the configurations.
-   *
-   * @return true if the validation succeeds, false otherwise
+   * @return whether the configuration describes how to find the master host, either through
+   *         explicit configuration or through zookeeper
    */
-  public static boolean validateConf() {
-    boolean valid = true;
-    for (Map.Entry<String, String> entry : Configuration.toMap().entrySet()) {
-      String propertyName = entry.getKey();
-      if (!PropertyKey.isValid(propertyName)) {
-        LOG.error("Unsupported property " + propertyName);
-        valid = false;
-      }
-    }
-    return valid;
+  public static boolean masterHostConfigured() {
+    boolean usingZk = Configuration.getBoolean(PropertyKey.ZOOKEEPER_ENABLED)
+        && Configuration.containsKey(PropertyKey.ZOOKEEPER_ADDRESS);
+    return Configuration.containsKey(PropertyKey.MASTER_HOSTNAME) || usingZk;
   }
 }

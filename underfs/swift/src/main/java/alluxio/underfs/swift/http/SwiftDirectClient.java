@@ -11,7 +11,6 @@
 
 package alluxio.underfs.swift.http;
 
-import alluxio.Constants;
 import alluxio.underfs.swift.SwiftOutputStream;
 
 import org.javaswift.joss.model.Access;
@@ -26,12 +25,13 @@ import java.net.URLConnection;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
- * Contains direct calls to OpenStack Swift. This is needed to bypass certain limitations in the
+ * Makes direct calls to a Swift API backend. This is needed to bypass certain limitations in the
  * JOSS package.
  */
 @ThreadSafe
 public class SwiftDirectClient {
-  private static final Logger LOG = LoggerFactory.getLogger(Constants.LOGGER_TYPE);
+  private static final Logger LOG = LoggerFactory.getLogger(SwiftDirectClient.class);
+
   private static final int HTTP_READ_TIMEOUT = 100 * 1000;
   private static final int HTTP_CHUNK_STREAMING = 8 * 1024 * 1024;
 

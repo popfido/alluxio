@@ -11,6 +11,7 @@
 
 package alluxio.security.authentication;
 
+import alluxio.exception.AccessControlException;
 import alluxio.exception.ExceptionMessage;
 import alluxio.security.User;
 import alluxio.util.SecurityUtils;
@@ -37,11 +38,6 @@ public final class AuthenticatedClientUser {
   private static ThreadLocal<User> sUserThreadLocal = new ThreadLocal<>();
 
   /**
-   * Constructs a new {@link AuthenticatedClientUser}.
-   */
-  public AuthenticatedClientUser() {}
-
-  /**
    * Creates a {@link User} and sets it to the {@link ThreadLocal} variable.
    *
    * @param userName the name of the client user
@@ -53,9 +49,10 @@ public final class AuthenticatedClientUser {
   /**
    * Gets the {@link User} from the {@link ThreadLocal} variable.
    *
-   * @return the client user
+   * @return the client user, null if the user is not present
    * @throws IOException if authentication is not enabled
    */
+  // TODO(peis): Fail early if the user is not able to be set to avoid returning null.
   public static User get() throws IOException {
     if (!SecurityUtils.isAuthenticationEnabled()) {
       throw new IOException(ExceptionMessage.AUTHENTICATION_IS_NOT_ENABLED.getMessage());
@@ -64,9 +61,31 @@ public final class AuthenticatedClientUser {
   }
 
   /**
+   * Gets the user name from the {@link ThreadLocal} variable.
+   *
+   * @return the client user in string
+   * @throws AccessControlException there is no authenticated user for this thread or
+   *         the authentication is not enabled
+   */
+  public static String getClientUser() throws AccessControlException {
+    try {
+      User user = get();
+      if (user == null) {
+        throw new AccessControlException(
+            ExceptionMessage.AUTHORIZED_CLIENT_USER_IS_NULL.getMessage());
+      }
+      return user.getName();
+    } catch (IOException e) {
+      throw new AccessControlException(ExceptionMessage.AUTHENTICATION_IS_NOT_ENABLED.getMessage());
+    }
+  }
+
+  /**
    * Removes the {@link User} from the {@link ThreadLocal} variable.
    */
   public static synchronized void remove() {
     sUserThreadLocal.remove();
   }
+
+  private AuthenticatedClientUser() {} // prevent instantiation
 }

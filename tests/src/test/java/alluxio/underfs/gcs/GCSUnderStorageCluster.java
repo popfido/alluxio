@@ -11,10 +11,10 @@
 
 package alluxio.underfs.gcs;
 
-import alluxio.Constants;
 import alluxio.exception.PreconditionMessage;
 import alluxio.underfs.UnderFileSystem;
 import alluxio.underfs.UnderFileSystemCluster;
+import alluxio.underfs.options.DeleteOptions;
 import alluxio.util.io.PathUtils;
 
 import com.google.common.base.Preconditions;
@@ -32,7 +32,8 @@ import java.util.UUID;
  * manual means.
  */
 public class GCSUnderStorageCluster extends UnderFileSystemCluster {
-  private static final Logger LOG = LoggerFactory.getLogger(Constants.LOGGER_TYPE);
+  private static final Logger LOG = LoggerFactory.getLogger(GCSUnderStorageCluster.class);
+
   private static final String INTEGRATION_GCS_BUCKET = "gcsBucket";
 
   private boolean mStarted;
@@ -42,7 +43,7 @@ public class GCSUnderStorageCluster extends UnderFileSystemCluster {
     super(baseDir);
     mGCSBucket =
         PathUtils.concatPath(System.getProperty(INTEGRATION_GCS_BUCKET), UUID.randomUUID());
-    Preconditions.checkState(mGCSBucket != null && mGCSBucket != "",
+    Preconditions.checkState(mGCSBucket != null && !mGCSBucket.equals(""),
         PreconditionMessage.GCS_BUCKET_MUST_BE_SET.toString(), INTEGRATION_GCS_BUCKET);
     mBaseDir = PathUtils.concatPath(mGCSBucket, UUID.randomUUID());
     mStarted = false;
@@ -66,8 +67,8 @@ public class GCSUnderStorageCluster extends UnderFileSystemCluster {
   @Override
   public void shutdown() throws IOException {
     LOG.info("Shutting down GCS testing cluster, deleting bucket contents in: " + mGCSBucket);
-    UnderFileSystem ufs = UnderFileSystem.get(mGCSBucket);
-    ufs.delete(mGCSBucket, true);
+    UnderFileSystem ufs = UnderFileSystem.Factory.get(mGCSBucket);
+    ufs.deleteDirectory(mGCSBucket, DeleteOptions.defaults().setRecursive(true));
   }
 
   @Override

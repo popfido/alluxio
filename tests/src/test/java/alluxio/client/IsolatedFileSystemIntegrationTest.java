@@ -51,7 +51,7 @@ public class IsolatedFileSystemIntegrationTest {
       new LocalAlluxioClusterResource.Builder()
           .setProperty(PropertyKey.WORKER_MEMORY_SIZE, WORKER_CAPACITY_BYTES)
           .setProperty(PropertyKey.USER_BLOCK_SIZE_BYTES_DEFAULT, 100 * Constants.MB)
-          .setProperty(PropertyKey.USER_FILE_BUFFER_BYTES, Integer.toString(USER_QUOTA_UNIT_BYTES))
+          .setProperty(PropertyKey.USER_FILE_BUFFER_BYTES, USER_QUOTA_UNIT_BYTES)
           .build();
   private FileSystem mFileSystem = null;
   private CreateFileOptions mWriteBoth;
@@ -73,7 +73,7 @@ public class IsolatedFileSystemIntegrationTest {
       files.add(new AlluxioURI(uniqPath + k));
     }
     for (int k = 0; k < numOfFiles; k++) {
-      Assert.assertTrue(mFileSystem.getStatus(files.get(k)).getInMemoryPercentage() == 100);
+      Assert.assertEquals(100, mFileSystem.getStatus(files.get(k)).getInMemoryPercentage());
     }
     FileSystemTestUtils.createByteFile(mFileSystem, uniqPath + numOfFiles, fileSize, mWriteBoth);
     files.add(new AlluxioURI(uniqPath + numOfFiles));

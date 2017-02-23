@@ -5,6 +5,9 @@ group: User Guide
 priority: 0
 ---
 
+* 内容列表
+{:toc}
+
 体验Alluxio最简单的方式是单机本地安装。在这个快速上手指南里，我们会引导你在本地机器上安装Alluxio，挂载样本数据，对Alluxio中的数据执行一些基本操作。具体来说，包括:
 
 * 下载和配置Alluxio
@@ -20,7 +23,7 @@ priority: 0
 为了接下来的快速上手指南，你需要:
 
 * Mac OS X或Linux
-* Java 7或更新版本
+* [Java 7或更新版本](Java-Setup.html)
 * **[奖励]** AWS账户和秘钥
 
 ### 安装SSH(Mac OS X)
@@ -112,11 +115,11 @@ $ ./bin/alluxio fs ls /
 
 ```bash
 $ ./bin/alluxio fs cat /LICENSE
-Apache License
-Version 2.0, January 2004
-http://www.apache.org/licenses/
+                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
 
-TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
 ...
 ```
 
@@ -302,6 +305,7 @@ Alluxio可以部署在很多不同的环境下。
 * [Alluxio使用Swift](Configuring-Alluxio-with-Swift.html)
 * [Alluxio使用GlusterFS](Configuring-Alluxio-with-GlusterFS.html)
 * [Alluxio使用HDFS](Configuring-Alluxio-with-HDFS.html)
+* [Alluxio使用MapR-FS](Configuring-Alluxio-with-MapR-FS.html)
 * [Alluxio使用Secure HDFS](Configuring-Alluxio-with-secure-HDFS.html)
 * [Alluxio使用OSS](Configuring-Alluxio-with-OSS.html)
 * [Alluxio使用NFS](Configuring-Alluxio-with-NFS.html)

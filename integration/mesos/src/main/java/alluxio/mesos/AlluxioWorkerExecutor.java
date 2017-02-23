@@ -11,7 +11,6 @@
 
 package alluxio.mesos;
 
-import alluxio.Constants;
 import alluxio.cli.Format;
 import alluxio.underfs.UnderFileSystemRegistry;
 import alluxio.worker.AlluxioWorker;
@@ -31,7 +30,7 @@ import javax.annotation.concurrent.ThreadSafe;
  */
 @ThreadSafe
 public class AlluxioWorkerExecutor implements Executor {
-  private static final Logger LOG = LoggerFactory.getLogger(Constants.LOGGER_TYPE);
+  private static final Logger LOG = LoggerFactory.getLogger(AlluxioWorkerExecutor.class);
 
   /**
    * Creates a new {@link AlluxioWorkerExecutor}.
@@ -75,8 +74,7 @@ public class AlluxioWorkerExecutor implements Executor {
           Thread.currentThread().setContextClassLoader(
               UnderFileSystemRegistry.class.getClassLoader());
 
-          // TODO(jiri): Consider handling Format.main() failures gracefully.
-          Format.main(new String[] {"worker"});
+          Format.format("worker");
           AlluxioWorker.main(new String[] {});
 
           status =
@@ -84,7 +82,7 @@ public class AlluxioWorkerExecutor implements Executor {
                   .setState(Protos.TaskState.TASK_FINISHED).build();
           driver.sendStatusUpdate(status);
         } catch (Exception e) {
-          e.printStackTrace();
+          LOG.error("Error starting Alluxio worker", e);
         }
       }
     }.start();

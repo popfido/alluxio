@@ -12,13 +12,14 @@
 package alluxio;
 
 import alluxio.exception.AlluxioException;
-import alluxio.retry.CountingRetry;
+import alluxio.network.connection.ThriftClientPool;
+import alluxio.retry.ExponentialBackoffRetry;
+import alluxio.retry.RetryPolicy;
 import alluxio.thrift.AlluxioService;
 import alluxio.thrift.AlluxioTException;
 import alluxio.thrift.ThriftIOException;
 
 import com.google.common.base.Preconditions;
-import com.google.common.base.Throwables;
 import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,10 +32,14 @@ import java.io.IOException;
  * @param <C> the Alluxio service type
  */
 public abstract class AbstractThriftClient<C extends AlluxioService.Client> {
+  private static final Logger LOG = LoggerFactory.getLogger(AbstractThriftClient.class);
 
-  private static final Logger LOG = LoggerFactory.getLogger(Constants.LOGGER_TYPE);
-
-  private static final int RPC_MAX_NUM_RETRY = 30;
+  private static final int BASE_SLEEP_MS =
+      Configuration.getInt(PropertyKey.USER_RPC_RETRY_BASE_SLEEP_MS);
+  private static final int MAX_SLEEP_MS =
+      Configuration.getInt(PropertyKey.USER_RPC_RETRY_MAX_SLEEP_MS);
+  private static final int RPC_MAX_NUM_RETRY =
+      Configuration.getInt(PropertyKey.USER_RPC_RETRY_MAX_NUM_RETRY);
 
   /**
    * If the implementation of this function guarantees that the client returned will not
@@ -95,7 +100,8 @@ public abstract class AbstractThriftClient<C extends AlluxioService.Client> {
    */
   protected <V> V retryRPC(RpcCallable<V, C> rpc) throws IOException {
     TException exception = null;
-    CountingRetry retryPolicy = new CountingRetry(RPC_MAX_NUM_RETRY);
+    RetryPolicy retryPolicy =
+        new ExponentialBackoffRetry(BASE_SLEEP_MS, MAX_SLEEP_MS, RPC_MAX_NUM_RETRY);
     do {
       C client = acquireClient();
       try {
@@ -103,7 +109,13 @@ public abstract class AbstractThriftClient<C extends AlluxioService.Client> {
       } catch (ThriftIOException e) {
         throw new IOException(e);
       } catch (AlluxioTException e) {
-        throw Throwables.propagate(AlluxioException.fromThrift(e));
+        AlluxioException ae = AlluxioException.fromThrift(e);
+        try {
+          processException(client, ae);
+        } catch (AlluxioException ee) {
+          throw new IOException(ee);
+        }
+        exception = new TException(ae);
       } catch (TException e) {
         LOG.error(e.getMessage(), e);
         closeClient(client);
@@ -133,13 +145,16 @@ public abstract class AbstractThriftClient<C extends AlluxioService.Client> {
   protected <V> V retryRPC(RpcCallableThrowsAlluxioTException<V, C> rpc)
       throws AlluxioException, IOException {
     TException exception = null;
-    CountingRetry retryPolicy = new CountingRetry(RPC_MAX_NUM_RETRY);
+    RetryPolicy retryPolicy =
+        new ExponentialBackoffRetry(BASE_SLEEP_MS, MAX_SLEEP_MS, RPC_MAX_NUM_RETRY);
     do {
       C client = acquireClient();
       try {
         return rpc.call(client);
       } catch (AlluxioTException e) {
-        throw AlluxioException.fromThrift(e);
+        AlluxioException ae = AlluxioException.fromThrift(e);
+        processException(client, ae);
+        exception = new TException(ae);
       } catch (ThriftIOException e) {
         throw new IOException(e);
       } catch (TException e) {
@@ -157,11 +172,22 @@ public abstract class AbstractThriftClient<C extends AlluxioService.Client> {
   }
 
   /**
+   * Do some processing based on the exception.
+   *
+   * @param client the client
+   * @param e the exception
+   * @throws E if the exception is not suppressed
+   */
+  protected <E extends Exception> void processException(C client, E e) throws E {
+    throw e;
+  }
+
+  /**
    * Close the given client.
    *
    * @param client the client to close
    */
   private void closeClient(C client) {
-    client.getOutputProtocol().getTransport().close();
+    ThriftClientPool.closeThriftClient(client);
   }
 }

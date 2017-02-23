@@ -37,21 +37,28 @@ import java.net.InetSocketAddress;
 import java.util.regex.Pattern;
 
 import javax.annotation.concurrent.ThreadSafe;
+import javax.security.auth.Subject;
 
 /**
  * The base class for clients.
  */
+// TODO(peis): Consolidate this to ThriftClientPool.
 @ThreadSafe
 public abstract class AbstractClient implements Client {
-
-  private static final Logger LOG = LoggerFactory.getLogger(Constants.LOGGER_TYPE);
+  private static final Logger LOG = LoggerFactory.getLogger(AbstractClient.class);
 
   /** The pattern of exception message when client and server transport frame sizes do not match. */
   private static final Pattern FRAME_SIZE_EXCEPTION_PATTERN =
       Pattern.compile("Frame size \\((\\d+)\\) larger than max length");
 
+  private static final int BASE_SLEEP_MS =
+      Configuration.getInt(PropertyKey.USER_RPC_RETRY_BASE_SLEEP_MS);
+  private static final int MAX_SLEEP_MS =
+      Configuration.getInt(PropertyKey.USER_RPC_RETRY_MAX_SLEEP_MS);
+
   /** The number of times to retry a particular RPC. */
-  protected static final int RPC_MAX_NUM_RETRY = 30;
+  protected static final int RPC_MAX_NUM_RETRY =
+      Configuration.getInt(PropertyKey.USER_RPC_RETRY_MAX_NUM_RETRY);
 
   protected final String mMode;
 
@@ -75,17 +82,21 @@ public abstract class AbstractClient implements Client {
   /** Handler to the transport provider according to the authentication type. */
   protected final TransportProvider mTransportProvider;
 
+  private final Subject mParentSubject;
+
   /**
    * Creates a new client base.
    *
+   * @param subject the parent subject, set to null if not present
    * @param address the address
    * @param mode the mode of the client for display
    */
-  public AbstractClient(InetSocketAddress address, String mode) {
+  public AbstractClient(Subject subject, InetSocketAddress address, String mode) {
     mAddress = Preconditions.checkNotNull(address);
     mMode = mode;
     mServiceVersion = Constants.UNKNOWN_SERVICE_VERSION;
     mTransportProvider = TransportProvider.Factory.create();
+    mParentSubject = subject;
   }
 
   /**
@@ -161,16 +172,15 @@ public abstract class AbstractClient implements Client {
     Preconditions.checkState(!mClosed, "Client is closed, will not try to connect.");
 
     int maxConnectsTry = Configuration.getInt(PropertyKey.MASTER_RETRY);
-    final int BASE_SLEEP_MS = 50;
     RetryPolicy retry =
-        new ExponentialBackoffRetry(BASE_SLEEP_MS, Constants.SECOND_MS, maxConnectsTry);
+        new ExponentialBackoffRetry(BASE_SLEEP_MS, MAX_SLEEP_MS, maxConnectsTry);
     while (!mClosed) {
       mAddress = getAddress();
       LOG.info("Alluxio client (version {}) is trying to connect with {} {} @ {}",
           RuntimeConstants.VERSION, getServiceName(), mMode, mAddress);
 
       TProtocol binaryProtocol =
-          new TBinaryProtocol(mTransportProvider.getClientTransport(mAddress));
+          new TBinaryProtocol(mTransportProvider.getClientTransport(mParentSubject, mAddress));
       mProtocol = new TMultiplexedProtocol(binaryProtocol, getServiceName());
       try {
         mProtocol.getTransport().open();
@@ -180,7 +190,7 @@ public abstract class AbstractClient implements Client {
         checkVersion(getClient(), getServiceVersion());
         return;
       } catch (IOException e) {
-        if (FRAME_SIZE_EXCEPTION_PATTERN.matcher(e.getMessage()).find()) {
+        if (e.getMessage() != null && FRAME_SIZE_EXCEPTION_PATTERN.matcher(e.getMessage()).find()) {
           // See an error like "Frame size (67108864) larger than max length (16777216)!",
           // pointing to the helper page.
           String message = String.format("Failed to connect to %s %s @ %s: %s. "
@@ -201,6 +211,7 @@ public abstract class AbstractClient implements Client {
               + "is not able to connect to servers with SIMPLE security mode.";
           throw new IOException(message, e);
         }
+        // TODO(peis): Consider closing the connection here as well.
         if (!retry.attemptRetry()) {
           break;
         }
@@ -252,11 +263,9 @@ public abstract class AbstractClient implements Client {
   }
 
   /**
-   * Returns the {@link InetSocketAddress} of the remote.
-   *
    * @return the {@link InetSocketAddress} of the remote
    */
-  protected synchronized InetSocketAddress getAddress() {
+  public synchronized InetSocketAddress getAddress() {
     return mAddress;
   }
 
@@ -308,8 +317,9 @@ public abstract class AbstractClient implements Client {
    */
   protected synchronized <V> V retryRPC(RpcCallable<V> rpc) throws IOException,
       ConnectionFailedException {
-    int retry = 0;
-    while (!mClosed && (retry++) <= RPC_MAX_NUM_RETRY) {
+    RetryPolicy retryPolicy =
+        new ExponentialBackoffRetry(BASE_SLEEP_MS, MAX_SLEEP_MS, RPC_MAX_NUM_RETRY);
+    while (!mClosed) {
       connect();
       try {
         return rpc.call();
@@ -319,10 +329,13 @@ public abstract class AbstractClient implements Client {
         throw Throwables.propagate(AlluxioException.fromThrift(e));
       } catch (TException e) {
         LOG.error(e.getMessage(), e);
-        mConnected = false;
+        disconnect();
+      }
+      if (!retryPolicy.attemptRetry()) {
+        break;
       }
     }
-    throw new IOException("Failed after " + retry + " retries.");
+    throw new IOException("Failed after " + retryPolicy.getRetryCount() + " retries.");
   }
 
   /**
@@ -339,8 +352,9 @@ public abstract class AbstractClient implements Client {
    */
   protected synchronized <V> V retryRPC(RpcCallableThrowsAlluxioTException<V> rpc)
       throws AlluxioException, IOException {
-    int retry = 0;
-    while (!mClosed && (retry++) <= RPC_MAX_NUM_RETRY) {
+    RetryPolicy retryPolicy =
+        new ExponentialBackoffRetry(BASE_SLEEP_MS, MAX_SLEEP_MS, RPC_MAX_NUM_RETRY);
+    while (!mClosed) {
       connect();
       try {
         return rpc.call();
@@ -350,9 +364,12 @@ public abstract class AbstractClient implements Client {
         throw new IOException(e);
       } catch (TException e) {
         LOG.error(e.getMessage(), e);
-        mConnected = false;
+        disconnect();
+      }
+      if (!retryPolicy.attemptRetry()) {
+        break;
       }
     }
-    throw new IOException("Failed after " + retry + " retries.");
+    throw new IOException("Failed after " + retryPolicy.getRetryCount() + " retries.");
   }
 }

@@ -12,9 +12,8 @@
 package alluxio.client.keyvalue;
 
 import alluxio.AlluxioURI;
-import alluxio.Constants;
-import alluxio.client.ClientContext;
 import alluxio.client.file.FileSystem;
+import alluxio.client.file.FileSystemContext;
 import alluxio.exception.AlluxioException;
 import alluxio.exception.ExceptionMessage;
 import alluxio.exception.PreconditionMessage;
@@ -37,7 +36,7 @@ import javax.annotation.concurrent.NotThreadSafe;
  */
 @NotThreadSafe
 class BaseKeyValueStoreWriter implements KeyValueStoreWriter {
-  private static final Logger LOG = LoggerFactory.getLogger(Constants.LOGGER_TYPE);
+  private static final Logger LOG = LoggerFactory.getLogger(BaseKeyValueStoreWriter.class);
 
   private final FileSystem mFileSystem = FileSystem.Factory.get();
   private final KeyValueMasterClient mMasterClient;
@@ -66,7 +65,7 @@ class BaseKeyValueStoreWriter implements KeyValueStoreWriter {
    */
   BaseKeyValueStoreWriter(AlluxioURI uri) throws IOException, AlluxioException {
     LOG.info("Create KeyValueStoreWriter for {}", uri);
-    mMasterClient = new KeyValueMasterClient(ClientContext.getMasterAddress());
+    mMasterClient = new KeyValueMasterClient(FileSystemContext.INSTANCE.getMasterAddress());
 
     mStoreUri = Preconditions.checkNotNull(uri);
     mMasterClient.createStore(mStoreUri);

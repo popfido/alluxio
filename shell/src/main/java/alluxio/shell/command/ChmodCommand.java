@@ -15,6 +15,8 @@ import alluxio.AlluxioURI;
 import alluxio.client.file.FileSystem;
 import alluxio.client.file.options.SetAttributeOptions;
 import alluxio.exception.AlluxioException;
+import alluxio.security.authorization.Mode;
+import alluxio.security.authorization.ModeParser;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Options;
@@ -28,6 +30,8 @@ import javax.annotation.concurrent.ThreadSafe;
  */
 @ThreadSafe
 public final class ChmodCommand extends AbstractShellCommand {
+
+  private final ModeParser mParser = new ModeParser();
 
   /**
    * Creates a new instance of {@link ChmodCommand}.
@@ -64,12 +68,12 @@ public final class ChmodCommand extends AbstractShellCommand {
    */
   private void chmod(AlluxioURI path, String modeStr, boolean recursive) throws
       AlluxioException, IOException {
-    short mode = Short.parseShort(modeStr, 8);
+    Mode mode = mParser.parse(modeStr);
     SetAttributeOptions options =
         SetAttributeOptions.defaults().setMode(mode).setRecursive(recursive);
     mFileSystem.setAttribute(path, options);
     System.out
-        .println("Changed permission of " + path + " to " + Integer.toOctalString(mode));
+        .println("Changed permission of " + path + " to " + Integer.toOctalString(mode.toShort()));
   }
 
   @Override

@@ -21,8 +21,6 @@ import alluxio.util.network.NetworkAddressUtils;
 import alluxio.wire.WorkerNetAddress;
 
 import org.apache.thrift.TException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -38,8 +36,6 @@ import javax.annotation.concurrent.ThreadSafe;
  */
 @ThreadSafe
 public final class KeyValueWorkerClient extends AbstractClient {
-  private static final Logger LOG = LoggerFactory.getLogger(Constants.LOGGER_TYPE);
-
   private KeyValueWorkerClientService.Client mClient = null;
 
   /**
@@ -48,7 +44,7 @@ public final class KeyValueWorkerClient extends AbstractClient {
    * @param workerNetAddress location of the worker to connect to
    */
   public KeyValueWorkerClient(WorkerNetAddress workerNetAddress) {
-    super(NetworkAddressUtils.getRpcPortSocketAddress(workerNetAddress), "key-value-worker");
+    super(null, NetworkAddressUtils.getRpcPortSocketAddress(workerNetAddress), "key-value-worker");
   }
 
   @Override

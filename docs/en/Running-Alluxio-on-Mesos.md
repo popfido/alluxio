@@ -6,6 +6,9 @@ group: Deploying Alluxio
 priority: 4
 ---
 
+* Table of Contents
+{:toc}
+
 Alluxio can be deployed through Mesos. This allows Mesos to manage the resources used by Alluxio. For the Alluxio
 master this is just the cpu and memory needed by the JVM process. For the worker it is the same, but with the addition
 of the memory needed by the ramdisk.
@@ -13,6 +16,32 @@ of the memory needed by the ramdisk.
 ## Mesos version
 
 Alluxio is compatible with Mesos 0.23.0 and later.
+
+## Mesos requirements
+
+By default, the Alluxio Master needs ports 19998 and 19999, and the Alluxio Worker needs ports 29998, 29999, and 30000.
+For Mesos to run Alluxio, you must either make these ports available to Mesos frameworks, or change the Alluxio ports.
+
+#### Making ports available
+
+When you launch the Mesos slave, you can specify the port resources for it to manage.
+
+```bash
+$ /usr/local/sbin/mesos-slave --resources='ports:[19998-19999,29998-30000]'
+```
+
+#### Changing Alluxio ports
+
+Alternately, you may specify the Alluxio ports in your `alluxio-site.properties` file like so:
+
+```properties
+alluxio.master.port=31398
+alluxio.master.web.port=31399
+
+alluxio.worker.port=31498
+alluxio.worker.data.port=31499
+alluxio.worker.web.port=31500
+```
 
 ## Deploying Alluxio on Mesos
 
@@ -49,7 +78,7 @@ Note that the tarball should be compiled with `-Pmesos`. Released Alluxio tarbal
 By default, the Alluxio Mesos framework will download the Java 7 jdk and use it to run Alluxio. If you would prefer
 to use whatever version of java is available on the Mesos executor, set the configuration property
 
-```
+```properties
 alluxio.integration.mesos.jdk.url=LOCAL
 ```
 
@@ -60,6 +89,7 @@ This means you can configure the launched Alluxio cluster by setting configurati
 
 #### Log files
 
-The `./integration/bin/alluxio-mesos.sh` script will launch an `AlluxioFramework` Java process which will log to `alluxio/logs/framework.out`.
+The `./integration/mesos/bin/alluxio-mesos-start.sh` script will launch an `AlluxioFramework` Java process which will log to `alluxio/logs/framework.out`.
+
 Alluxio masters and workers launched on Mesos will write their Alluxio logs to `mesos_container/logs/`. There
 may also be useful information in the `mesos_container/stderr` file.

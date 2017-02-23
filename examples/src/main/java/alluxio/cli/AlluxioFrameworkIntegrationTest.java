@@ -15,15 +15,15 @@ import alluxio.AlluxioURI;
 import alluxio.Configuration;
 import alluxio.Constants;
 import alluxio.PropertyKey;
-import alluxio.client.ClientContext;
 import alluxio.client.block.BlockMasterClient;
-import alluxio.client.block.RetryHandlingBlockMasterClient;
 import alluxio.client.file.FileInStream;
 import alluxio.client.file.FileOutStream;
 import alluxio.client.file.FileSystem;
 import alluxio.exception.ConnectionFailedException;
 import alluxio.util.CommonUtils;
+import alluxio.util.WaitForOptions;
 import alluxio.util.io.PathUtils;
+import alluxio.util.network.NetworkAddressUtils;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -36,18 +36,20 @@ import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.util.Map;
 import java.util.Map.Entry;
 
 /**
- * Integration tests for {@link AlluxioFramework}. These tests assume that a Mesos cluster is
+ * Integration tests for AlluxioFramework. These tests assume that a Mesos cluster is
  * running locally.
  */
 public final class AlluxioFrameworkIntegrationTest {
+  private static final Logger LOG = LoggerFactory.getLogger(AlluxioFrameworkIntegrationTest.class);
+
   private static final String JDK_URL =
       "https://s3-us-west-2.amazonaws.com/alluxio-mesos/jdk-7u79-macosx-x64.tar.gz";
   private static final String JDK_PATH = "jdk1.7.0_79.jdk/Contents/Home";
-  private static final Logger LOG = LoggerFactory.getLogger(Constants.LOGGER_TYPE);
 
   @Parameter(names = {"-m", "--mesos"}, required = true,
       description = "Address for locally-running Mesos, e.g. localhost:5050")
@@ -98,8 +100,10 @@ public final class AlluxioFrameworkIntegrationTest {
     try {
       startAlluxioFramework(env);
       LOG.info("Launched Alluxio cluster, waiting for worker to register with master");
-      try (final BlockMasterClient client =
-          new RetryHandlingBlockMasterClient(ClientContext.getMasterAddress())) {
+      String masterHostName = NetworkAddressUtils.getLocalHostName();
+      int masterPort = Configuration.getInt(PropertyKey.MASTER_RPC_PORT);
+      InetSocketAddress masterAddress = new InetSocketAddress(masterHostName, masterPort);
+      try (final BlockMasterClient client = BlockMasterClient.Factory.create(masterAddress)) {
         CommonUtils.waitFor("Alluxio worker to register with master",
             new Function<Void, Boolean>() {
               @Override
@@ -115,7 +119,7 @@ public final class AlluxioFrameworkIntegrationTest {
                   throw Throwables.propagate(e);
                 }
               }
-            }, 15 * Constants.MINUTE_MS);
+            }, WaitForOptions.defaults().setTimeout(15 * Constants.MINUTE_MS));
       }
       LOG.info("Worker registered");
       basicAlluxioTests();
@@ -126,7 +130,7 @@ public final class AlluxioFrameworkIntegrationTest {
 
   private void startAlluxioFramework(Map<String, String> extraEnv) {
     String startScript = PathUtils.concatPath(Configuration.get(PropertyKey.HOME),
-        "integration", "bin", "alluxio-mesos.sh");
+        "integration", "mesos", "bin", "alluxio-mesos-start.sh");
     ProcessBuilder pb = new ProcessBuilder(startScript, mMesosAddress);
     Map<String, String> env = pb.environment();
     env.putAll(extraEnv);
@@ -188,7 +192,7 @@ public final class AlluxioFrameworkIntegrationTest {
 
   private static void stopAlluxioFramework() throws Exception {
     String stopScript = PathUtils.concatPath(Configuration.get(PropertyKey.HOME),
-        "integration", "bin", "stop-alluxio-framework.sh");
+        "integration", "mesos", "bin", "alluxio-mesos-stop.sh");
     ProcessBuilder pb = new ProcessBuilder(stopScript);
     pb.start().waitFor();
     // Wait for Mesos to unregister and shut down the Alluxio Framework.

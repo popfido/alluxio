@@ -11,8 +11,6 @@
 
 package alluxio.underfs.swift;
 
-import alluxio.Constants;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,8 +26,7 @@ import javax.annotation.concurrent.NotThreadSafe;
  */
 @NotThreadSafe
 public class SwiftOutputStream extends OutputStream {
-
-  private static final Logger LOG = LoggerFactory.getLogger(Constants.LOGGER_TYPE);
+  private static final Logger LOG = LoggerFactory.getLogger(SwiftOutputStream.class);
 
   private OutputStream mOutputStream;
   private HttpURLConnection mHttpCon;
@@ -73,7 +70,7 @@ public class SwiftOutputStream extends OutputStream {
       // Status 400 and up should be read from error stream
       // Expecting here 201 Create or 202 Accepted
       if (mHttpCon.getResponseCode() >= 400) {
-        LOG.error("Failed to write data to Swift, error code: " + mHttpCon.getResponseCode());
+        LOG.error("Failed to write data to Swift with error code: " + mHttpCon.getResponseCode());
         is = mHttpCon.getErrorStream();
       } else {
         is = mHttpCon.getInputStream();

@@ -12,11 +12,8 @@
 package alluxio.shell.command;
 
 import alluxio.AlluxioURI;
-import alluxio.client.block.AlluxioBlockStore;
 import alluxio.client.file.FileSystem;
-import alluxio.client.file.URIStatus;
 import alluxio.exception.AlluxioException;
-import alluxio.exception.InvalidPathException;
 
 import org.apache.commons.cli.CommandLine;
 
@@ -26,19 +23,17 @@ import javax.annotation.concurrent.ThreadSafe;
 
 /**
  * Displays the file's all blocks info.
+ *
+ * @deprecated since version 1.5
  */
 @ThreadSafe
+@Deprecated
 public final class FileInfoCommand extends WithWildCardPathCommand {
-
-  /** The block store client. */
-  private final AlluxioBlockStore mBlockStore;
-
   /**
    * @param fs the filesystem of Alluxio
    */
   public FileInfoCommand(FileSystem fs) {
     super(fs);
-    mBlockStore = new AlluxioBlockStore();
   }
 
   @Override
@@ -47,18 +42,10 @@ public final class FileInfoCommand extends WithWildCardPathCommand {
   }
 
   @Override
-  void runCommand(AlluxioURI path, CommandLine cl) throws AlluxioException, IOException {
-    URIStatus status = mFileSystem.getStatus(path);
-
-    if (status.isFolder()) {
-      throw new InvalidPathException(path + " is a directory path so does not have file blocks.");
-    }
-
-    System.out.println(status);
-    System.out.println("Containing the following blocks: ");
-    for (long blockId : status.getBlockIds()) {
-      System.out.println(mBlockStore.getInfo(blockId));
-    }
+  protected void runCommand(AlluxioURI path, CommandLine cl) throws AlluxioException, IOException {
+    System.out
+        .println("The \"alluxio fs fileInfo <path>\" command is deprecated since version 1.5.");
+    System.out.println("Use the \"alluxio fs stat <path>\" command instead.");
   }
 
   @Override
